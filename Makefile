@@ -1,4 +1,4 @@
-# pxplot Makefile
+# spxplot Makefile
 
 SRC=test.c
 EXE=spxtest

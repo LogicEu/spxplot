@@ -1,4 +1,4 @@
-# pxplot.h
+# spxplot.h
 
-Simple pixel plotting header only library in C89
+Simple pixel plotting header only library in C.
 
