@@ -38,7 +38,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 Simple pixel plotter header only library in C89. 
 Provides right out of the box plotting functions
-and algorithms to easily own images.
+and algorithms to easily create your own images.
 
 ****************************************************/
 
@@ -66,18 +66,33 @@ typedef struct Tex2D {
 
 #endif /* TEX2D_TYPE_DEFINED */
 
+#ifndef IVEC2_TYPE_DEFINED
+#define IVEC2_TYPE_DEFINED
+
 typedef struct ivec2 {
     int x, y;
 } ivec2;
+
+#endif /* IVEC2_TYPE_DEFINED */
+
+#ifndef VEC2_TYPE_DEFINED
+#define VEC2_TYPE_DEFINED
 
 typedef struct vec2 {
     float x, y;
 } vec2;
 
+#endif /* VEC2_TYPE_DEFINED */
+
+#ifndef VERT2D_TYPE_DEFINED
+#define VERT2D_TYPE_DEFINED
+
 typedef struct Vert2D {
     vec2 pos;
     vec2 uv;
 } Vert2D;
+
+#endif /* VERT2D_TYPE_DEFINED */
 
 #define pxAbs(n) (((n) >= 0) ? (n) : -(n))
 #define pxSign(n) (((n) >= 0) ? 1 : -1)
@@ -121,43 +136,38 @@ void    pxPlotCircleSmooth(const Tex2D texture, ivec2 p, float r, const Px color
 
 /* plotting functions */
 
-static uint8_t lerp8(uint8_t a, uint8_t b, float t)
+static uint8_t mix8(uint8_t a, uint8_t b, float t)
 {
     return (uint8_t)((float)a + t * (float)(b - a));
 }
 
-static float lerpf(float a, float b, float t)
-{
-    return a + t * (b - a);
-}
-
-static float ilerpf(float min, float max, float n)
+static float normalize(float min, float max, float n)
 {
     n -= min;
     return n == 0.0F ? 0.0F : (max - min) / n;
 }
 
-static vec2 vec2_lerp(vec2 a, vec2 b, float t)
+static vec2 vec2_mix(vec2 a, vec2 b, float t)
 {
     vec2 p;
-    p.x = lerpf(a.x, b.x, t);
-    p.y = lerpf(a.y, b.y, t);
+    p.x = a.x + t * (b.x - a.x);
+    p.y = a.y + t * (b.y - a.y);
     return p;
+}
+
+static float vec2_determinant(vec2 a, vec2 b, vec2 c)
+{
+    return (c.x - a.x) * (b.y - a.y) - (c.y - a.y) * (b.x - a.x);
 }
 
 Px pxLerp(Px a, Px b, float t)
 {
     Px px;
-    px.r = lerp8(a.r, b.r, t);
-    px.g = lerp8(a.g, b.g, t);
-    px.b = lerp8(a.b, b.b, t);
-    px.a = lerp8(a.a, b.a, t);
+    px.r = mix8(a.r, b.r, t);
+    px.g = mix8(a.g, b.g, t);
+    px.b = mix8(a.b, b.b, t);
+    px.a = mix8(a.a, b.a, t);
     return px;
-}
-
-static float pxEdge(vec2 a, vec2 b, vec2 c)
-{
-    return (c.x - a.x) * (b.y - a.y) - (c.y - a.y) * (b.x - a.x);
 }
 
 void pxPlot(const Tex2D texture, int x, int y, Px color)
@@ -281,9 +291,9 @@ void pxPlotBezier2(const Tex2D texture, vec2 a, vec2 b, vec2 c, const Px col)
     
     for (t = 0.0F; t < 1.0F; t += delta) {
         vec2 p, q;
-        p = vec2_lerp(a, c, t);
-        q = vec2_lerp(c, b, t);
-        p = vec2_lerp(p, q, t);
+        p = vec2_mix(a, c, t);
+        q = vec2_mix(c, b, t);
+        p = vec2_mix(p, q, t);
         pxPlot(texture, (int)p.x, (int)p.y, col);
     }
 }
@@ -326,9 +336,9 @@ void pxPlotBezier2Smooth(const Tex2D texture, vec2 a, vec2 b, vec2 c, const Px c
     const float delta = dxy != 0.0F ? 1.0F / dxy : 1.0F;
 
     for (t = delta; t < 1.0; t += delta) {
-        vec2 p1 = vec2_lerp(a, c, t);
-        vec2 p2 = vec2_lerp(c, b, t);
-        q = vec2_lerp(p1, p2, t);
+        vec2 p1 = vec2_mix(a, c, t);
+        vec2 p2 = vec2_mix(c, b, t);
+        q = vec2_mix(p1, p2, t);
         pxPlotLineSmooth(texture, p, q, col);
         p = q;
     }
@@ -488,9 +498,9 @@ void pxPlotTriSmooth(const Tex2D texture, vec2 p0, vec2 p1, vec2 p2, const Px co
                 vec2 q;
                 q.x = p.x + 0.5F * P[j].x;
                 q.y = p.y + 0.5F * P[j].y;
-                sum += (float)( pxEdge(p1, p2, q) >= 0.0F &&
-                                pxEdge(p2, p0, q) >= 0.0F &&
-                                pxEdge(p0, p1, q) >= 0.0F);
+                sum += (float)( vec2_determinant(p1, p2, q) >= 0.0F &&
+                                vec2_determinant(p2, p0, q) >= 0.0F &&
+                                vec2_determinant(p0, p1, q) >= 0.0F);
             }
 
             pxAt(texture, x, y) = pxLerp(pxAt(texture, x, y), color, sum * ni);
@@ -574,8 +584,8 @@ void pxMapTri2D(const Tex2D fb, const Tex2D texture, Vert2D p0, Vert2D p1, Vert2
             unsigned long j;
             float t, sum = 0.0F;
             
-            t = ilerpf(x0, x1, (float)x), 
-            uv = vec2_lerp(uv0, uv1, t);
+            t = normalize(x0, x1, (float)x),
+            uv = vec2_mix(uv0, uv1, t);
             p.x =(float)x;
             p.y = (float)y;
 
@@ -583,9 +593,9 @@ void pxMapTri2D(const Tex2D fb, const Tex2D texture, Vert2D p0, Vert2D p1, Vert2
                 vec2 q;
                 q.x = p.x + 0.5F * P[j].x;
                 q.y = p.y + 0.5F * P[j].y;
-                sum += (float)( pxEdge(p1.pos, p2.pos, q) >= 0.0F &&
-                                pxEdge(p2.pos, p0.pos, q) >= 0.0F &&
-                                pxEdge(p0.pos, p1.pos, q) >= 0.0F);
+                sum += (float)( vec2_determinant(p1.pos, p2.pos, q) >= 0.0F &&
+                                vec2_determinant(p2.pos, p0.pos, q) >= 0.0F &&
+                                vec2_determinant(p0.pos, p1.pos, q) >= 0.0F);
             }
             
             color = pxTexMap(texture, uv);
