@@ -107,6 +107,7 @@ typedef struct Vert2D {
 
 Px      pxLerp(Px a, Px b, float t);
 void    pxPlot(const Tex2D texture, int x, int y, Px color);
+void    pxMix(const Tex2D texture, int x, int y, Px color);
 void    pxBlend(const Tex2D texture, int x, int y, float t, Px color);
 void    pxPlotLine(const Tex2D texture, ivec2 p, ivec2 q, const Px color);
 void    pxPlotLineSmooth(const Tex2D texture, vec2 p, vec2 q, const Px color);
@@ -155,6 +156,14 @@ static vec2 vec2_mix(vec2 a, vec2 b, float t)
     return p;
 }
 
+static vec2 vec2_floor(vec2 a)
+{
+    vec2 p;
+    p.x = floor(a.x);
+    p.y = floor(a.y);
+    return p;
+}
+
 static float vec2_determinant(vec2 a, vec2 b, vec2 c)
 {
     return (c.x - a.x) * (b.y - a.y) - (c.y - a.y) * (b.x - a.x);
@@ -182,6 +191,13 @@ void pxBlend(const Tex2D texture, int x, int y, float t, Px color)
     if (x >= 0 && x < texture.width && y >= 0 && y < texture.height) {
         pxAt(texture, x, y) = pxLerp(pxAt(texture, x, y), color, t);
     }
+}
+
+void pxMix(const Tex2D texture, int x, int y, Px color)
+{
+    float t = (float)color.a / 255.0F;
+    color.a = 255;
+    pxBlend(texture, x, y, t, color);
 }
 
 void pxPlotLine(const Tex2D texture, ivec2 p, ivec2 q, const Px color)
@@ -232,11 +248,11 @@ void pxPlotLineSmooth(const Tex2D texture, vec2 p, vec2 q, const Px color)
     dy = q.y - p.y;
     g = (dx != 0.0F) ? dy / dx : 1.0F;
 
-    xend = floorf(p.x);
+    xend = floor(p.x);
     yend = p.y + g * (xend - p.x);
-    xgap = 1.0F - ((p.x + 0.5F) - floorf(p.x + 0.5F));
+    xgap = 1.0F - ((p.x + 0.5F) - floor(p.x + 0.5F));
     xpos1 = xend;
-    ypos1 = floorf(yend);
+    ypos1 = floor(yend);
     fpart = yend - (float)(ypos1);
     rfpart = 1.0F - fpart;
 
@@ -249,11 +265,11 @@ void pxPlotLineSmooth(const Tex2D texture, vec2 p, vec2 q, const Px color)
     }
 
     intery = yend + g;
-    xend = floorf(q.x);
+    xend = floor(q.x);
     yend = q.y + g * (xend - q.x);
-    xgap = 1.0F - ((q.x + 0.5F) - floorf(q.x + 0.5F));
+    xgap = 1.0F - ((q.x + 0.5F) - floor(q.x + 0.5F));
     xpos2 = xend;
-    ypos2 = floorf(yend);
+    ypos2 = floor(yend);
     fpart = yend - (float)ypos2;
     rfpart = 1.0F - fpart;
 
@@ -261,7 +277,7 @@ void pxPlotLineSmooth(const Tex2D texture, vec2 p, vec2 q, const Px color)
         pxBlend(texture, ypos2, xpos2, rfpart * xgap, color);
         pxBlend(texture, ypos2 + 1, xpos2, fpart * xgap, color);
         for (x = xpos1 + 1; x < xpos2; ++x) {
-            const int y = floorf(intery);
+            const int y = floor(intery);
             fpart = intery - (float)y;
             rfpart = 1.0F - fpart;
             pxBlend(texture, y, x, rfpart, color);
@@ -272,7 +288,7 @@ void pxPlotLineSmooth(const Tex2D texture, vec2 p, vec2 q, const Px color)
         pxBlend(texture, xpos2, ypos2, rfpart * xgap, color);
         pxBlend(texture, xpos2, ypos2 + 1, fpart * xgap, color);
         for (x = xpos1 + 1; x < xpos2; ++x) {
-            const int y = floorf(intery);
+            const int y = floor(intery);
             fpart = intery - (float)y;
             rfpart = 1.0F - fpart;
             pxBlend(texture, x, y, rfpart, color);
@@ -298,35 +314,6 @@ void pxPlotBezier2(const Tex2D texture, vec2 a, vec2 b, vec2 c, const Px col)
     }
 }
 
-void pxPlotBezier3(const Tex2D texture, vec2 a, vec2 b, vec2 c, vec2 d, const Px col)
-{
-    float t;
-    vec2 q, p = a;
-    const float dx = pxAbs(d.x - a.x), dy = pxAbs(d.y - a.y);
-    const float dxy = dx + dy;
-    const float delta = dxy != 0.0F ? 1.0F / dxy : 1.0F;
-    
-    for (t = delta; t < 1.0F; t += delta) {
-        
-        float u = 1.0F - t;
-        float tt = t * t;
-        float uu = u * u;
-        float uuu = uu * u;
-        float ttt = tt * t;
-        float uut = 3.0F * uu * t;
-        float utt = 3.0F * u * tt;
-        
-        q.x = uuu * a.x + uut * b.x + utt * c.x + ttt * d.x;
-        q.y = uuu * a.y + uut * b.y + utt * c.y + ttt * d.y;
-
-        pxPlotLineSmooth(texture, p, q, col);
-        p = q;
-    }
-    
-    q = d;
-    pxPlotLineSmooth(texture, p, q, col);
-}
-
 void pxPlotBezier2Smooth(const Tex2D texture, vec2 a, vec2 b, vec2 c, const Px col)
 {
     float t;
@@ -344,6 +331,34 @@ void pxPlotBezier2Smooth(const Tex2D texture, vec2 a, vec2 b, vec2 c, const Px c
     }
     
     q = b;
+    pxPlotLineSmooth(texture, p, q, col);
+}
+
+void pxPlotBezier3(
+    const Tex2D texture, vec2 a, vec2 b, vec2 c, vec2 d, const Px col)
+{
+    float t;
+    vec2 q, p = a;
+    const float dx = pxAbs(d.x - a.x), dy = pxAbs(d.y - a.y);
+    const float dxy = dx + dy;
+    const float delta = dxy != 0.0F ? 4.0F / dxy : 1.0F;
+    
+    for (t = delta; t < 1.0F; t += delta) { 
+        float u = 1.0F - t;
+        float tt = t * t;
+        float uu = u * u;
+        float uuu = uu * u;
+        float ttt = tt * t;
+        float uut = 3.0F * uu * t;
+        float utt = 3.0F * u * tt;
+        
+        q.x = uuu * a.x + uut * b.x + utt * c.x + ttt * d.x;
+        q.y = uuu * a.y + uut * b.y + utt * c.y + ttt * d.y;
+        pxPlotLineSmooth(texture, vec2_floor(p), vec2_floor(q), col);
+        p = q;
+    }
+    
+    q = d;
     pxPlotLineSmooth(texture, p, q, col);
 }
 
