@@ -115,6 +115,7 @@ void    pxPlotBezier2(const Tex2D texture, vec2 a, vec2 b, vec2 c, const Px col)
 void    pxPlotBezier2Smooth(const Tex2D texture, vec2 a, vec2 b, vec2 c, const Px col);
 void    pxPlotBezier3(const Tex2D texture, vec2 a, vec2 b, vec2 c, vec2 d, const Px col);
 void    pxPlotRect(const Tex2D texture, ivec2 p, ivec2 q, const Px color);
+void    pxPlotRectRound(const Tex2D texture, ivec2 p, ivec2 q, float t, const Px color);
 void    pxPlotTri(const Tex2D texture, ivec2 p0, ivec2 p1, ivec2 p2, const Px color);
 void    pxPlotTriSmooth(const Tex2D texture, vec2 p0, vec2 p1, vec2 p2, const Px c);
 void    pxPlotCircle(const Tex2D texture, ivec2 p, float r, const Px color);
@@ -375,6 +376,39 @@ void pxPlotRect(const Tex2D texture, ivec2 p, ivec2 q, const Px color)
             pxAt(texture, x, y) = color;
         }
     }
+}
+
+void pxPlotRectRound(const Tex2D texture, ivec2 p, ivec2 q, float t, const Px color)
+{
+    const float min = (float)pxMin(q.x, q.y);
+    const float r = floor(min * pxClamp(t, 0.0, 1.0));
+    const float d = ceil((q.y - r) + r * 0.5);
+    int R = (int)r;
+    ivec2 u = q, v = p, w = p;
+    
+    v.y += d;
+    w.y -= d;
+    q.y -= R;
+    u.x -= R;
+    u.y = R / 2;
+    pxPlotRect(texture, p, q, color);
+    pxPlotRect(texture, v, u, color);
+    pxPlotRect(texture, w, u, color);
+    
+    q.x -= R;
+    v.x = p.x - q.x - 1;
+    v.y = p.y - q.y - 1;
+    w.x = p.x + q.x;
+    w.y = p.y - q.y - 1;
+    u.x = p.x - q.x - 1;
+    u.y = p.y + q.y;
+    q.x = p.x + q.x;
+    q.y = p.y + q.y;
+    
+    pxPlotCircleSmooth(texture, u, R, color);
+    pxPlotCircleSmooth(texture, v, R, color);
+    pxPlotCircleSmooth(texture, w, R, color);
+    pxPlotCircleSmooth(texture, q, R, color);
 }
 
 static void pxSortTri(ivec2 t[3])
