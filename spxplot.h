@@ -106,6 +106,8 @@ typedef struct Vert2D {
                                 (py) >= 0 && (py) < tex.height)
 
 Px      pxLerp(Px a, Px b, float t);
+Px      pxTexMap(const Tex2D texture, vec2 uv);
+Px      pxTexMapBilinear(const Tex2D texture, vec2 uv);
 void    pxPlot(const Tex2D texture, int x, int y, Px color);
 void    pxMix(const Tex2D texture, int x, int y, Px color);
 void    pxBlend(const Tex2D texture, int x, int y, float t, Px color);
@@ -118,8 +120,11 @@ void    pxPlotRect(const Tex2D texture, ivec2 p, ivec2 q, const Px color);
 void    pxPlotRectRound(const Tex2D texture, ivec2 p, ivec2 q, float t, const Px color);
 void    pxPlotTri(const Tex2D texture, ivec2 p0, ivec2 p1, ivec2 p2, const Px color);
 void    pxPlotTriSmooth(const Tex2D texture, vec2 p0, vec2 p1, vec2 p2, const Px c);
+void    pxPlotTriTex(const Tex2D fb, const Tex2D tex, Vert2D p0, Vert2D p1, Vert2D p2);
 void    pxPlotCircle(const Tex2D texture, ivec2 p, float r, const Px color);
 void    pxPlotCircleSmooth(const Tex2D texture, ivec2 p, float r, const Px color);
+void    pxPlotTexture(const Tex2D fb, const Tex2D texture, ivec2 p);
+void    pxPlotTextureCentered(const Tex2D fb, const Tex2D texture, ivec2 p);
 
 #ifdef SPXP_APPLICATION
 
@@ -145,8 +150,7 @@ static uint8_t mix8(uint8_t a, uint8_t b, float t)
 
 static float normalize(float min, float max, float n)
 {
-    n -= min;
-    return n == 0.0F ? 0.0F : (max - min) / n;
+    return max - min == 0.0F ? 0.0F : (n - min) / (max - min);
 }
 
 static vec2 vec2_mix(vec2 a, vec2 b, float t)
@@ -537,7 +541,7 @@ void pxPlotTriSmooth(const Tex2D texture, vec2 p0, vec2 p1, vec2 p2, const Px co
         for (x = startx; x < endx; ++x) {
             
             vec2 p;
-            unsigned long j;
+            unsigned int j;
             float sum = 0.0F;
             
             p.x = x;
@@ -559,19 +563,39 @@ void pxPlotTriSmooth(const Tex2D texture, vec2 p0, vec2 p1, vec2 p2, const Px co
 
 Px pxTexMap(const Tex2D texture, vec2 uv)
 {
-    float u = uv.x - (float)(int)uv.x, v = uv.y - (float)(int)uv.y;
-    float x = (float)texture.width * u, y = (float)texture.height * v;
+    float x = (float)(texture.width - 1) * (uv.x - floor(uv.x));
+    float y = (float)(texture.height - 1) * (uv.y - floor(uv.y));
     return pxAt(texture, (int)x, (int)y);
 }
 
-void pxMapTri2D(const Tex2D fb, const Tex2D texture, Vert2D p0, Vert2D p1, Vert2D p2)
+Px pxTexMapBilinear(const Tex2D texture, vec2 uv)
+{
+    vec2 fcoord;
+    ivec2 icoord;
+    Px samples[4];
+    fcoord.x = uv.x * (texture.width - 1);
+    fcoord.y = uv.y * (texture.height - 1);
+    icoord.x = (int)fcoord.x;
+    icoord.y = (int)fcoord.y;
+    fcoord.x -= icoord.x;
+    fcoord.y -= icoord.y;
+    samples[0] = pxAt(texture, icoord.x, icoord.y);
+    samples[1] = pxAt(texture, icoord.x + 1, icoord.y);
+    samples[2] = pxAt(texture, icoord.x, icoord.y + 1);
+    samples[3] = pxAt(texture, icoord.x + 1, icoord.y + 1);
+    samples[0] = pxLerp(samples[0], samples[1], fcoord.x);
+    samples[1] = pxLerp(samples[2], samples[3], fcoord.x);
+    return pxLerp(samples[0], samples[1], fcoord.y);
+}
+
+void pxPlotTriTex(const Tex2D fb, const Tex2D texture, Vert2D p0, Vert2D p1, Vert2D p2)
 {
     static const vec2 P[] = {
         {0.0F, 0.0F}, {1.0F, 0.0F}, {0.0F, -1.0F}, {-1.0F, 0.0F}, {0.0F, 1.0F}
         ,{1.0F, 1.0F}, {1.0F, -1.0F}, {-1.0F, -1.0F}, {-1.0F, 1.0F}
     };
 
-    const int resx = fb.width - 1, resy = fb.height - 1;
+    const int resy = fb.height - 1;
     const float ni = 1.0F / (sizeof(P) / sizeof(P[0]));
     float difx[3], difu[3], difv[3], steps[3];
     int y, n, starty, endy;
@@ -600,7 +624,7 @@ void pxMapTri2D(const Tex2D fb, const Tex2D texture, Vert2D p0, Vert2D p1, Vert2
     steps[1] = t[1].pos.y - t[0].pos.y ? 1.0F / (t[1].pos.y - t[0].pos.y) : 0.0F;
     steps[2] = t[2].pos.y - t[1].pos.y ? 1.0F / (t[2].pos.y - t[1].pos.y) : 0.0F;
 
-    for (y = starty, n = 1; y <= (int)endy; ++y) {
+    for (y = starty, n = 1; y <= endy; ++y) {
         
         vec2 uv0, uv1;
         int x, startx, endx;
@@ -611,7 +635,7 @@ void pxMapTri2D(const Tex2D fb, const Tex2D texture, Vert2D p0, Vert2D p1, Vert2
         d1 = steps[n] != 0.0F ? steps[n] * ((float)y - t[n - 1].pos.y) : 1.0F;
         x0 = t[0].pos.x + difx[0] * pxMax(d0, 0.0F); 
         x1 = t[n - 1].pos.x + difx[n] * pxMax(d1, 0.0F);
-        
+
         uv0.x = t[0].uv.x + difu[0] * pxMax(d0, 0.0F);
         uv0.y = t[0].uv.y + difv[0] * pxMax(d0, 0.0F);
 
@@ -622,20 +646,20 @@ void pxMapTri2D(const Tex2D fb, const Tex2D texture, Vert2D p0, Vert2D p1, Vert2
             pxSwap(x0, x1, float);
             pxSwap(uv0, uv1, vec2);
         }
-        
+ 
         startx = pxMax(x0, 0);
-        endx = pxMin(x1 + 1, resx);
+        endx = pxMin(x1 + 1, fb.width);
         
         for (x = startx; x < endx; ++x) {
             
             Px color;
             vec2 p, uv;
-            unsigned long j;
+            unsigned int j;
             float t, sum = 0.0F;
             
-            t = normalize(x0, x1, (float)x),
+            t = normalize(x0, x1, x),
             uv = vec2_mix(uv0, uv1, t);
-            p.x =(float)x;
+            p.x = (float)x;
             p.y = (float)y;
 
             for (j = 0; j < sizeof(P) / sizeof(p); ++j) {
@@ -646,12 +670,38 @@ void pxMapTri2D(const Tex2D fb, const Tex2D texture, Vert2D p0, Vert2D p1, Vert2
                                 vec2_determinant(p2.pos, p0.pos, q) >= 0.0F &&
                                 vec2_determinant(p0.pos, p1.pos, q) >= 0.0F);
             }
-            
-            color = pxTexMap(texture, uv);
-            pxBlend(fb, x, y, ni * sum, color);
+           
+            color = pxTexMapBilinear(texture, uv);
+            pxBlend(fb, x, y, sum * ni, color);
 
         }
     }
+}
+
+void pxPlotTexture(const Tex2D fb, const Tex2D texture, ivec2 p)
+{
+    int x, y;
+    ivec2 coord;
+    const int minx = -pxMin(0, p.x);
+    const int resx = fb.width, resy = fb.height;
+    const int startx = pxClamp(p.x, 0, resx);
+    const int starty = pxClamp(p.y, 0, resy);
+    const int endx = pxClamp(p.x + texture.width - 1, 0, resx);
+    const int endy = pxClamp(p.y + texture.height - 1, 0, resy);
+    coord.y = -pxMin(0, p.y);
+    for (y = starty; y < endy; ++y, ++coord.y) {
+        coord.x = minx;
+        for (x = startx; x < endx; ++x, ++coord.x) {
+            pxAt(fb, x, y) = pxAt(texture, coord.x, coord.y);
+        }
+    }
+}
+
+void pxPlotTextureCentered(const Tex2D fb, const Tex2D texture, ivec2 p)
+{
+    p.x -= texture.width >> 1;
+    p.y -= texture.height >> 1;
+    pxPlotTexture(fb, texture, p);
 }
 
 void pxPlotCircle(const Tex2D texture, ivec2 p, float r, const Px color)
@@ -666,7 +716,7 @@ void pxPlotCircle(const Tex2D texture, ivec2 p, float r, const Px color)
     for (y = starty; y <= endy; ++y) {
         float dy = p.y - y + 0.5F;
         dy *= dy;
-        for (x = startx + 1; x <= endx; ++x) {
+        for (x = startx; x <= endx; ++x) {
             float dx = p.x - x + 0.5F;
             if (dx * dx + dy <= sqr) {
                 pxAt(texture, x, y) = color;
@@ -687,7 +737,7 @@ void pxPlotCircleSmooth(const Tex2D texture, ivec2 p, float r, const Px color)
     const int endy = pxClamp(p.y + r + 1.0F, 0, resy);
     for (y = starty; y <= endy; ++y) {
         const float dy = p.y - (float)y + 0.5F;
-        for (x = startx + 1; x <= endx; ++x) {
+        for (x = startx; x <= endx; ++x) {
             
             int count = 0;
             float dx = p.x - (float)x + 0.5F, n;
