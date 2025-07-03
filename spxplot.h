@@ -494,12 +494,12 @@ void pxPlotTri(const Tex2D texture, ivec2 p0, ivec2 p1, ivec2 p2, const Px color
 void pxPlotTriSmooth(const Tex2D texture, vec2 p0, vec2 p1, vec2 p2, const Px color)
 {
     static const vec2 P[] = {
-        {0.0F, 0.0F}, {1.0F, 0.0F}, {0.0F, -1.0F}, {-1.0F, 0.0F}, {0.0F, 1.0F}
-        ,{1.0F, 1.0F}, {1.0F, -1.0F}, {-1.0F, -1.0F}, {-1.0F, 1.0F}
+        {0.0F, 0.0F}, {0.5F, 0.0F}, {0.0F, -0.5F}, {-0.5F, 0.0F}, {0.0F, 0.5F},
+        {0.5F, 0.5F}, {0.5F, -0.5F}, {-0.5F, -0.5F}, {-0.5F, 0.5F}
     };
     
     const int resx = texture.width - 1, resy = texture.height - 1;
-    const float ni = 1.0F / (sizeof(P) / sizeof(P[0]));
+    const float ni = (float)sizeof(P[0]) / (float)sizeof(P);
     float difx[3], steps[3];
     int y, n, starty, endy;
     vec2 t[3];
@@ -544,13 +544,13 @@ void pxPlotTriSmooth(const Tex2D texture, vec2 p0, vec2 p1, vec2 p2, const Px co
             unsigned int j;
             float sum = 0.0F;
             
-            p.x = x;
-            p.y = y;
+            p.x = (float)x;
+            p.y = (float)y;
             
             for (j = 0; j < sizeof(P) / sizeof(P[0]); ++j) {
                 vec2 q;
-                q.x = p.x + 0.5F * P[j].x;
-                q.y = p.y + 0.5F * P[j].y;
+                q.x = p.x + P[j].x;
+                q.y = p.y + P[j].y;
                 sum += (float)( vec2_determinant(p1, p2, q) >= 0.0F &&
                                 vec2_determinant(p2, p0, q) >= 0.0F &&
                                 vec2_determinant(p0, p1, q) >= 0.0F);
