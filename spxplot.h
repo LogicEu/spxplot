@@ -125,6 +125,7 @@ void    pxPlotCircle(const Tex2D texture, ivec2 p, float r, const Px color);
 void    pxPlotCircleSmooth(const Tex2D texture, ivec2 p, float r, const Px color);
 void    pxPlotTexture(const Tex2D fb, const Tex2D texture, ivec2 p);
 void    pxPlotTextureCentered(const Tex2D fb, const Tex2D texture, ivec2 p);
+void    pxPlotCircleOutline(const Tex2D texture, vec2 p, float r, float t, const Px col);
 
 #ifdef SPXP_APPLICATION
 
@@ -239,6 +240,7 @@ void pxPlotLineSmooth(const Tex2D texture, vec2 p, vec2 q, const Px color)
     const int steep = pxAbs(q.y - p.y) > pxAbs(q.x - p.x);
     int x, xpos1, ypos1, xpos2, ypos2;
     float g, dx, dy, xend, yend, xgap, fpart, rfpart, intery;
+    float alpha = (float)color.a / 255.0F;
     
     if (steep) {
         pxSwap(p.x, p.y, float);
@@ -262,11 +264,11 @@ void pxPlotLineSmooth(const Tex2D texture, vec2 p, vec2 q, const Px color)
     rfpart = 1.0F - fpart;
 
     if (steep) {
-        pxBlend(texture, ypos1, xpos1, rfpart * xgap, color);
-        pxBlend(texture, ypos1 + 1, xpos1, fpart * xgap, color);
+        pxBlend(texture, ypos1, xpos1, rfpart * xgap * alpha, color);
+        pxBlend(texture, ypos1 + 1, xpos1, fpart * xgap * alpha, color);
     } else {
-        pxBlend(texture, xpos1, ypos1, rfpart * xgap, color);
-        pxBlend(texture, xpos1, ypos1 + 1, fpart * xgap, color);
+        pxBlend(texture, xpos1, ypos1, rfpart * xgap * alpha, color);
+        pxBlend(texture, xpos1, ypos1 + 1, fpart * xgap * alpha, color);
     }
 
     intery = yend + g;
@@ -279,25 +281,25 @@ void pxPlotLineSmooth(const Tex2D texture, vec2 p, vec2 q, const Px color)
     rfpart = 1.0F - fpart;
 
     if (steep) {
-        pxBlend(texture, ypos2, xpos2, rfpart * xgap, color);
-        pxBlend(texture, ypos2 + 1, xpos2, fpart * xgap, color);
+        pxBlend(texture, ypos2, xpos2, rfpart * xgap * alpha, color);
+        pxBlend(texture, ypos2 + 1, xpos2, fpart * xgap * alpha, color);
         for (x = xpos1 + 1; x < xpos2; ++x) {
             const int y = floor(intery);
             fpart = intery - (float)y;
             rfpart = 1.0F - fpart;
-            pxBlend(texture, y, x, rfpart, color);
-            pxBlend(texture, y + 1, x, fpart, color);
+            pxBlend(texture, y, x, rfpart * alpha, color);
+            pxBlend(texture, y + 1, x, fpart * alpha, color);
             intery += g;
         }
     } else {
-        pxBlend(texture, xpos2, ypos2, rfpart * xgap, color);
-        pxBlend(texture, xpos2, ypos2 + 1, fpart * xgap, color);
+        pxBlend(texture, xpos2, ypos2, rfpart * xgap * alpha, color);
+        pxBlend(texture, xpos2, ypos2 + 1, fpart * xgap * alpha, color);
         for (x = xpos1 + 1; x < xpos2; ++x) {
             const int y = floor(intery);
             fpart = intery - (float)y;
             rfpart = 1.0F - fpart;
-            pxBlend(texture, x, y, rfpart, color);
-            pxBlend(texture, x, y + 1, fpart, color);
+            pxBlend(texture, x, y, rfpart * alpha, color);
+            pxBlend(texture, x, y + 1, fpart * alpha, color);
             intery += g;
         }
     }
@@ -756,6 +758,42 @@ void pxPlotCircleSmooth(const Tex2D texture, ivec2 p, float r, const Px color)
         }
     }
 }
+
+void pxPlotCircleOutline(const Tex2D texture, vec2 p, float r, float t, const Px color)
+{
+    int x, y, sx, sy;
+    const float sqr = r * r;
+    static const float subscale = 1.0F / (float)SPXP_SUBSAMPLES;
+    const int resx = texture.width - 1, resy = texture.height - 1;
+    const int startx = pxClamp(p.x - r - 1.0F, 0, resx);
+    const int starty = pxClamp(p.y - r - 1.0F, 0, resy);
+    const int endx = pxClamp(p.x + r + 1.0F, 0, resx);
+    const int endy = pxClamp(p.y + r + 1.0F, 0, resy);
+    t *= r;
+    
+    for (y = starty; y <= endy; ++y) {
+        const float dy = p.y - (float)y + 0.5F;
+        for (x = startx; x <= endx; ++x) {
+            
+            int count = 0;
+            float dx = p.x - (float)x + 0.5F, n;
+            
+            for (sy = 0; sy < SPXP_SUBSAMPLES; ++sy) {
+                float sdy = dy + (float)sy * subscale;
+                sdy *= sdy;
+                for (sx = 0; sx < SPXP_SUBSAMPLES; ++sx) {
+                    float sdx = dx + (float)sx * subscale;
+                    float sdxysqr = sdx * sdx + sdy;
+                    count += sdxysqr <= sqr && sdxysqr >= sqr - t;
+                }
+            }
+            
+            n = (float)count / (float)(SPXP_SUBSAMPLES * SPXP_SUBSAMPLES);
+            pxBlend(texture, x, y, n, color);
+        }
+    }
+}
+
 
 #endif /* SPXP_APPLICATION */
 #endif /* SIMPLE_PIXEL_PLOTTER_H */
